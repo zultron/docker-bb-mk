@@ -17,10 +17,10 @@ class container(object):
         (r'^{\"stream\":\"(.*)\"}\s*$', lambda m: m.group(1)),
         # Escaped characters
         (r'\\u0026', '&'),
-        (r'\\u0009', ' '), # tab
+        (r'\\(u0009|t)', ' '), # tab -> spc
         (r'\\u003c', '<'),
         (r'\\u003e', '>'),
-        (r'\\u001b\[..', ''), # ???
+        (r'\\u001b\[[0-9]+m', ''), # Terminal colors
         # Whitespace
         (r'\\r', '\r'), # LF
         (r'\\n', '\n'), # CR

@@ -6,17 +6,24 @@
 #maintainer_name:  John Doe
 #maintainer_email: jdoe@example.com
 
-# Optional:  list of authorized ssh keys for 'docker' user
-# (only this style of line-wrapping is legal; if unsure, don't wrap!)
+# Optional: list of authorized ssh keys for 'docker' user; default
+# empty
 #
-#maintainer_keys:
-# - |
-#   ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDYxwCBG1KlrJnGIczyaq5a1ukjqILZjc
-#   uhcrpS/gep/M/L/L0tvXBYXCXpe8f7zDPa+rcNvmrI3FLgC/fzABLZazuBI6B+aZwTW7aD
-#   fSw/Y5isweBlJPS2qxK3R2EXamXcBBoQIZo8FScw49Iffw+PqgendX4+pUwD4Cf7Ei1EWI
-#   V8bdyct9SKevS6UrBXiELAaf+GkFHc6wbOtfaa8rzBedbSqXTx4AvhY5bnkcNUSBWdnjzr
-#   W3yqk8wIx7rLy1nqHxpJDkOkXaqi6ZrAE5DkQ/wcoN8BTbM4seQ055e52DfFqB7PYT6/gf
-#   2K1hxUn0DAAgWBn5J9OZo/mzNv0niI jdoe@example.com
+maintainer_keys:
+# Only this style of line-wrapping is legal; if unsure, don't wrap!
+# (Preserve relative spacing)
+#
+#   - |
+#     ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDYxwCBG1KlrJnGIczyaq5a1ukjqILZjc
+#     uhcrpS/gep/M/L/L0tvXBYXCXpe8f7zDPa+rcNvmrI3FLgC/fzABLZazuBI6B+aZwTW7aD
+#     fSw/Y5isweBlJPS2qxK3R2EXamXcBBoQIZo8FScw49Iffw+PqgendX4+pUwD4Cf7Ei1EWI
+#     V8bdyct9SKevS6UrBXiELAaf+GkFHc6wbOtfaa8rzBedbSqXTx4AvhY5bnkcNUSBWdnjzr
+#     W3yqk8wIx7rLy1nqHxpJDkOkXaqi6ZrAE5DkQ/wcoN8BTbM4seQ055e52DfFqB7PYT6/gf
+#     2K1hxUn0DAAgWBn5J9OZo/mzNv0niI jdoe@example.com
+#
+# Non-wrapped style:
+#
+#   - ssh-rsa AAAAB3NzaC1yc[...]/mzNv0niI jdoe@example.com
 
 # Optional:  configure a fast local Debian mirror
 #
@@ -54,12 +61,14 @@ slaves:
     password: flyicUbVauWryacOcKucmuwaisyotcuBudElpons
     master: d8-arm-posix
 
-# Optional:  Name and link of project, shown on web status page
+# Optional: Name and link of project, shown on web status page;
+# defaults to '(unknown)' and http://localhost:8010/
 #
 #web_title : Machinekit master
 #web_titleURL : https://github.com/machinekit/machinekit/
 
-# *External* URL of web status page; defaults to http://localhost:8010/
+# Required:  *External* URL of web status page; defaults to
+# http://localhost:8010/
 #
 # Once set, this should not be changed, or web status breaks!
 #

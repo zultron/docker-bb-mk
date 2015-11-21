@@ -50,7 +50,7 @@ slaves:
     password: togyoijHyarHafveHusirdErcyahianvatKakpel
     master: d8-64-posix
   d8-arm-posix:
-    base_image: armv7/armhf-debian:jessie
+    base_image: armbuild/debian:jessie
     password: flyicUbVauWryacOcKucmuwaisyotcuBudElpons
     master: d8-arm-posix
 

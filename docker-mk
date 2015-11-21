@@ -1,0 +1,299 @@
+#!/bin/bash -e
+#
+# Manage building and running Machinekit in Docker
+#
+# John Morris <john@zultron.com>
+#
+
+docker_name_default=mk-bb
+docker_image_default=mk-bb
+debian_mirror_default=ftp.us.debian.org
+docker_src_dir=/home/docker/mk
+
+usage() {
+    (
+	test -z "$*" || echo "$*"
+	echo "Usage:  $0 COMMAND"
+	echo "Commands:"
+	echo "    build:         Build 64-bit Docker image"
+	echo "    run:           Create (if needed) and run Docker container"
+	echo "    cleanup:       Clean up old containers and images"
+	echo "Environment variables:"
+	echo "    docker_UID:    Docker user ID" \
+	    "(default: '$(id -u)'; current: '$docker_UID')"
+	echo "    http_proxy:    Proxy URL" \
+	    "(default: none; current: '$http_proxy')"
+	echo "    docker_name:   Docker container name" \
+	    "(default: $docker_name_default; current: '$docker_name')"
+	echo "    docker_image:  Docker image name" \
+	    "(default: $docker_image_default; current: '$docker_image')"
+	echo "    debian_mirror: Debian mirror" \
+	    "(default: $debian_mirror_default; current: '$debian_mirror')"
+    ) 1>&2
+}
+
+info() {
+    echo "$*" 1>&2
+}
+
+# Set Docker UID same as user by default
+docker_UID=${docker_UID:-$(id -u)}
+# Container name
+docker_name=${docker_name:-${docker_name_default}}
+# Image name
+docker_image=${docker_image:-${docker_image_default}}
+# Debian mirror
+debian_mirror=${debian_mirror:-${debian_mirror_default}}
+
+# Command
+CMD="$1"
+
+# Base source code directory
+SOURCE_DIR="$(readlink -f $(dirname $0))"
+
+dockerfile-template() {
+    cat <<EOF
+# Machinekit 'sim' dev environment Docker container
+#
+FROM		${orig_image}
+
+MAINTAINER	John Morris <john@zultron.com>
+
+# Optionally set http proxy
+${HTTP_PROXY_DOCKER}
+RUN		test -z "${http_proxy}" || \
+		    ( echo 'Acquire::http::Proxy "'${http_proxy}'";' \
+		      | dd of=/etc/apt/apt.conf.d/10proxy; \
+		      cat /etc/apt/apt.conf.d/10proxy; )
+
+# Set up package repos
+RUN		sed -i -e "s/httpredir.debian.org/${debian_mirror}/" \
+		    /etc/apt/sources.list
+RUN		echo 'deb http://deb.dovetail-automata.com jessie main' > \
+		    /etc/apt/sources.list.d/dovetail-automata.list
+RUN		apt-get update
+RUN		apt-get install -y --force-yes dovetail-automata-keyring && \
+		    apt-get update
+RUN		apt-get upgrade -y
+# silence debconf warnings
+ENV		DEBIAN_FRONTEND noninteractive
+RUN		apt-get install --no-install-recommends -y \
+		    libfile-fcntllock-perl
+# don't install recommended packages
+RUN		echo 'APT::Install-Recommends "0";' > \
+		    /etc/apt/apt.conf.d/10local
+
+# Install MK run-time deps
+# FIXME:  Need more video drivers (xserver-xorg-video-*)?
+RUN		apt-get install -y \
+		    bwidget avahi-daemon xserver-xorg-video-intel \
+		    python-imaging python-imaging-tk python-gnome2 \
+		    python-glade2 python-numpy python-gtksourceview2 \
+		    python-vte python-xlib python-gtkglext1 python-configobj \
+		    python-gst0.10 python-avahi tclreadline bc libgl1-mesa-dri \
+		    netcat-openbsd
+RUN		apt-get install -y xterm # for touchy
+RUN		apt-get install -y gnome-icon-theme \
+		    gstreamer0.10-plugins-base # for gmoccapy
+RUN		mkdir -p /var/run/dbus
+RUN		mkdir /dev/dri && \
+		    mknod -m 660 /dev/dri/card0 c 226 0 && \
+		    mknod -m 660 /dev/dri/controlD64 c 226 64
+
+# Install MK build deps
+RUN		apt-get install -y devscripts equivs
+RUN		mkdir /tmp/debian
+COPY		control /tmp/debian/control
+RUN		cd /tmp && yes y | mk-build-deps -i
+
+# Install buildbot
+RUN	apt-get install -y \
+	    python-dev \
+	    python-pip
+RUN	pip install buildbot-slave
+RUN	pip install buildbot
+
+# Install and configure sudo
+RUN		apt-get -y install sudo
+RUN		sed -i /etc/sudoers -e '/^.sudo/ s/ALL\$/NOPASSWD: ALL/'
+
+# Dev tools
+RUN		apt-get install -y ccache git
+
+# FIXME TCL--move earlier
+RUN		apt-get install -y tcl8.6 tk8.6
+
+# Run-time environment settings
+# - Disable zeroconf announcement so `avahi-daemon` isn't necessary
+ENV		MK_ANNOUNCE_DISABLE 1
+# - Always log to stderr so a syslog daemon isn't necessary
+ENV		SYSLOG_TO_STDERR 1
+
+# Set up docker user with UID to match sources
+ENV		UID ${docker_UID}
+RUN		useradd -u ${docker_UID} -G sudo -M docker && \
+		    install -d -m 755 -o docker -g docker ~docker
+
+# Set up code directory
+VOLUME		${docker_src_dir}
+EXPOSE		8010
+
+# By default, run an interactive shell as user 'docker'
+USER		docker
+ENV		HOME /home/docker
+WORKDIR		${docker_src_dir}
+CMD		/bin/bash -i
+
+EOF
+}
+
+build-docker() {
+    echo $*
+    orig_image="debian:jessie"
+    info "Building docker container"
+    info "Source directory:  $SOURCE_DIR"
+    info "Docker UID:  $docker_UID"
+    info "Docker original image:  $orig_image"
+    if test -n "$http_proxy"; then
+	info "HTTP proxy URL:  $http_proxy"
+	export HTTP_PROXY="$http_proxy" # Docker image downloads
+	HTTP_PROXY_DOCKER="ENV		http_proxy $http_proxy"
+    fi
+    ENVDIR=/tmp/docker-mk-env
+    info "Building Docker environment in $ENVDIR"
+    mkdir -p $ENVDIR
+    # Only rebuild environment if something changed so Docker doesn't
+    # needlessly rebuild everything
+    if test -f $ENVDIR/Dockerfile && \
+	test "$(dockerfile-template | md5sum)" = \
+	"$(cat $ENVDIR/Dockerfile | md5sum)"; then
+	info "Dockerfile is current; not replacing"
+    else
+	dockerfile-template > $ENVDIR/Dockerfile
+    fi
+    if test -f $ENVDIR/control && \
+	test "$(cat  control | md5sum)" = \
+	"$(cat $ENVDIR/control | md5sum)"; then
+	info "control file is current; not replacing"
+    else
+	info "control file needs update"
+	cp control $ENVDIR/control
+    fi
+    info "Starting Docker build"
+    docker build -t $docker_image $ENVDIR
+}
+
+get-docker-container() {
+    # Get docker container info for $docker_name
+    local info="$(docker ps -a | \
+	awk '/ '$docker_name' *$/ {print "containerid=" $1 "; imageid=" $2}')"
+    eval "$info"
+    if test -n "$containerid"; then
+	if test "$imageid" = "${docker_image}:latest"; then
+	    info "Existing Docker container: $containerid;" \
+		"current image: $imageid"
+	    return 0
+	else
+	    info "Existing Docker container $containerid" \
+		"uses outdated image $imageid"
+	    return 1
+	fi
+    else
+	info "No existing Docker container"
+	return 1
+    fi
+}
+
+get-docker-image() {
+    # Get docker image info
+    if test -z "$containerid"; then
+	info "No existing Docker image"
+	return 1
+    fi
+    local imagename="$(docker images -a | \
+	awk '$3 == "'$imageid'" {print $1}')"
+    docker images -a | awk '$1 == "'$imageid'" {print $1}'
+    if test -z "$imagename" -o "$imagename" = '<none>'; then
+	info "Docker image needs update"
+	return 1
+    fi
+    info "Docker image '$imagename' current"
+    return 0
+}
+
+run-docker() {
+    info "Running docker"
+    if get-docker-container; then
+	info "Restarting existing Docker container '$containerid'"
+	docker start -ai $containerid
+	return
+    fi
+    if test -n "$imageid" -a "$imageid" != "${docker_image}:latest"; then
+	info "Removing outdated container '$containerid'"
+	docker rm $containerid
+	info "Removing outdated image '$imageid'"
+	docker rmi $imageid
+    fi
+    info "Creating new Docker container, name $docker_name"
+    docker run --name $docker_name -it \
+	--privileged=true \
+	-v=/tmp/.X11-unix:/tmp/.X11-unix \
+	-v $SOURCE_DIR:${docker_src_dir} \
+	-e DISPLAY=$DISPLAY -u=$docker_UID \
+	-p 8010:8010 \
+	$docker_image bash -i
+    return
+}
+
+cleanup-docker() {
+    info "Cleaning up old Docker containers"
+    local old="$(docker ps -a | \
+	sed -e '1d' -e 's/^.* \([^ ][^ ]*\) *$/\1/' -e '/^'$docker_name'$/ d' |
+	xargs echo)"
+    if test -n "$old"; then
+	info "Found old containers:"
+	info "   $old"
+	info "Press <enter> to remove, or ctrl-C to abort"
+	local x
+	read x
+	info "Removing:"
+	docker rm $old
+    else
+	info "No old containers found"
+    fi
+
+    info "Cleaning up dangling Docker images"
+    old="$(docker images -a -f=dangling=true | awk 'FNR>1 {print $3}' \
+	| xargs echo)"
+    if test -n "$old"; then
+	info "Found dangling Docker images:"
+	info "   $old"
+	info "Press <enter> to remove, or ctrl-C to abort"
+	local x
+	read x
+	info "Removing:"
+	docker rmi $old
+    else
+	info "No dangling images found"
+    fi
+}
+
+create-master() {
+    info "Creating Buildbot master"
+    buildbot create-master ${docker_src_dir}
+}
+
+create-slave() {
+    info "Creating Buildbot slave"
+    buildslave create-slave ${docker_src_dir}/slave localhost:9989 local-slave pass
+}
+
+case $CMD in
+    build)  build-docker "$@" ;;
+    run)  run-docker ;;
+    cleanup)  cleanup-docker ;;
+    create-master)  create-master ;;
+    create-slave)  create-slave "$@" ;;
+    '')  usage ;;
+    *)  usage "Unknown command '$CMD'" ;;
+esac

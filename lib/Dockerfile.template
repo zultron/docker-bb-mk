@@ -1,0 +1,119 @@
+# Buildbot in Docker container
+#
+# The first and last parts of this file are generic for setting up a
+# Buildbot with master and slave running in a Docker container.
+#
+# Edit the middle section to add build, test, etc. deps for your
+# application.
+FROM		%(base_image)s
+
+MAINTAINER	%(maintainer_name)s <%(maintainer_email)s>
+
+# Optionally set http proxy
+ENV		HTTP_PROXY = %(http_proxy)s
+RUN		test -z "${http_proxy}" || \
+		    ( echo 'Acquire::http::Proxy "'${http_proxy}'";' \
+		      | dd of=/etc/apt/apt.conf.d/10proxy; \
+		      cat /etc/apt/apt.conf.d/10proxy; )
+
+# Set up package repos
+RUN		sed -i -e "s/httpredir.debian.org/%(debian_mirror)s/" \
+		    /etc/apt/sources.list
+RUN		apt-get update
+RUN		apt-get upgrade -y
+# silence debconf warnings
+ENV		DEBIAN_FRONTEND noninteractive
+RUN		apt-get install --no-install-recommends -y \
+		    libfile-fcntllock-perl
+# don't install recommended packages
+RUN		echo 'APT::Install-Recommends "0";' > \
+		    /etc/apt/apt.conf.d/10local
+
+# Install dev tools
+RUN		apt-get install -y build-essential ccache git
+
+# Install buildbot
+RUN		apt-get install -y python-dev python-pip
+RUN		pip install buildbot-slave
+RUN		pip install buildbot
+#               Symlink to work directories for convenience
+RUN		rmdir /srv && ln -s %(container_dir)s /srv
+
+# Install supervisord
+RUN		apt-get install -y supervisor
+RUN		sed -i /etc/supervisor/supervisord.conf \
+		    -e '/^files *=/ s,.*,files = %(supervisord_conf)s/*.conf,'
+
+# Install Docker tools
+RUN		apt-get install -y python-yaml
+RUN		pip install docker-py dockerpty
+
+# Install and configure sudo
+RUN		apt-get -y install sudo
+RUN		sed -i /etc/sudoers -e '/^.sudo/ s/ALL$/NOPASSWD: ALL/'
+
+# Set up docker user with UID to match sources
+ENV		UID %(uid)s
+RUN		groupadd -g %(gid)s docker && \
+		    useradd -u %(uid)s -g %(gid)s -G sudo -M docker && \
+ 		    install -d -m 755 -o docker -g docker ~docker
+
+# Set up Buildbot work directory and network port
+VOLUME		%(container_dir)s
+EXPOSE		8010
+
+# Set up ssh access
+RUN		apt-get install -y ssh && \
+		    mkdir /var/run/sshd && \
+		    install -d -m 700 -o 1000 -g 1000 /home/docker/.ssh
+EXPOSE		22
+
+###########################################################################
+# Application-specific configuration
+
+# Set up Dovetail Automata package repository
+RUN		echo 'deb http://deb.dovetail-automata.com jessie main' > \
+		    /etc/apt/sources.list.d/dovetail-automata.list
+RUN		apt-get update
+RUN		apt-get install -y --force-yes dovetail-automata-keyring && \
+		    apt-get update
+
+# Install MK build deps
+RUN		apt-get install -y devscripts equivs
+RUN		mkdir /tmp/debian
+COPY		control /tmp/debian/control
+RUN		cd /tmp && yes y | mk-build-deps -i
+
+# Install MK run-time deps
+# FIXME:  Need more video drivers (xserver-xorg-video-*)?
+RUN		apt-get install -y \
+		    bwidget avahi-daemon xserver-xorg-video-intel \
+		    python-imaging python-imaging-tk python-gnome2 \
+		    python-glade2 python-numpy python-gtksourceview2 \
+		    python-vte python-xlib python-gtkglext1 python-configobj \
+		    python-gst0.10 python-avahi tclreadline bc libgl1-mesa-dri \
+		    netcat-openbsd tcl%(tcl_ver)s tk%(tcl_ver)s
+RUN		apt-get install -y xterm # for touchy
+RUN		apt-get install -y gnome-icon-theme \
+		    gstreamer0.10-plugins-base # for gmoccapy
+RUN		mkdir -p /var/run/dbus
+RUN		mkdir /dev/dri && \
+		    mknod -m 660 /dev/dri/card0 c 226 0 && \
+		    mknod -m 660 /dev/dri/controlD64 c 226 64
+
+# - Disable zeroconf announcement so `avahi-daemon` isn't necessary
+ENV		MK_ANNOUNCE_DISABLE 1
+# - Always log to stderr so a syslog daemon isn't necessary
+ENV		SYSLOG_TO_STDERR 1
+
+###########################################################################
+# Run-time environment settings
+
+# By default, run an interactive shell as user 'docker'
+USER		docker
+ENV		HOME /home/docker
+WORKDIR		%(container_dir)s
+# CMD		/bin/bash -i
+CMD		["/usr/bin/sudo", "-n", \
+		    "/usr/bin/supervisord", "-n",
+		    "-c", "/etc/supervisor/supervisord.conf"]

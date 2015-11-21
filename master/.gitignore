@@ -1,0 +1,10 @@
+/state.sqlite
+/buildbot.tac.new
+/http.log
+/twistd.log
+/twistd.pid
+/gitpoller-workdir/
+/build/
+/master.cfg.sample
+/public_html/
+/templates/

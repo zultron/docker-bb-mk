@@ -1,0 +1,8 @@
+*~
+*.pyc
+/config.yaml
+
+# FIXME
+/buildsteps.sh
+/master.cfg.old
+/Dockerfile-bb

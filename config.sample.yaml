@@ -1,0 +1,76 @@
+#########################################
+# Docker image build options
+
+# Optional:  your name and email; defaults taken from git
+#
+#maintainer_name:  John Doe
+#maintainer_email: jdoe@example.com
+
+# Optional:  list of authorized ssh keys for 'docker' user
+# (only this style of line-wrapping is legal; if unsure, don't wrap!)
+#
+#maintainer_keys:
+# - |
+#   ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDYxwCBG1KlrJnGIczyaq5a1ukjqILZjc
+#   uhcrpS/gep/M/L/L0tvXBYXCXpe8f7zDPa+rcNvmrI3FLgC/fzABLZazuBI6B+aZwTW7aD
+#   fSw/Y5isweBlJPS2qxK3R2EXamXcBBoQIZo8FScw49Iffw+PqgendX4+pUwD4Cf7Ei1EWI
+#   V8bdyct9SKevS6UrBXiELAaf+GkFHc6wbOtfaa8rzBedbSqXTx4AvhY5bnkcNUSBWdnjzr
+#   W3yqk8wIx7rLy1nqHxpJDkOkXaqi6ZrAE5DkQ/wcoN8BTbM4seQ055e52DfFqB7PYT6/gf
+#   2K1hxUn0DAAgWBn5J9OZo/mzNv0niI jdoe@example.com
+
+# Optional:  configure a fast local Debian mirror
+#
+#debian_mirror: ftp.us.debian.org
+
+# Optional:  configure a uid and gid for the Docker container; defaults
+# taken from the user running the script
+#
+#uid: 1000
+#gid: 1000
+
+# Optional:  where to bind mount this directory in the container;
+# defaults to /home/docker/bb
+#
+#container_dir: /home/docker/bb
+
+# Optional:  configure a proxy to cache packages during Docker image
+# build
+#
+#http_proxy:
+
+#########################################
+# Buildbot configuration options
+
+# Required:  Map of buildmaster and buildslaves to hosts; matched
+# against the `bin/dbb --docker-hostname HOSTNAME` argument
+#
+slaves:
+  d8-64-posix:
+    base_image: debian:jessie
+    password: togyoijHyarHafveHusirdErcyahianvatKakpel
+    master: d8-64-posix
+  d8-arm-posix:
+    base_image: armv7/armhf-debian:jessie
+    password: flyicUbVauWryacOcKucmuwaisyotcuBudElpons
+    master: d8-arm-posix
+
+# Optional:  Name and link of project, shown on web status page
+#
+#web_title : Machinekit master
+#web_titleURL : https://github.com/machinekit/machinekit/
+
+# *External* URL of web status page; defaults to http://localhost:8010/
+#
+# Once set, this should not be changed, or web status breaks!
+#
+#buildbotURL : http://localhost:8010/
+
+# Required:  Git repo URL (no default) and branch (default master)
+#
+#git_repo : https://github.com/zultron/machinekit.git
+#git_branch : test
+
+# Buildbot admin users and passwords; no defaults
+#
+admin_users :
+#  jdoe : randompass

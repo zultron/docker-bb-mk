@@ -65,7 +65,7 @@ class container(object):
             tty = True,
             ports = [8010],
             environment = dict(
-                DISPLAY = os.environ['DISPLAY']
+                DISPLAY = os.environ.get('DISPLAY','')
                 ),
             volumes = [self.config .container_dir, '/tmp/.X11-unix'],
             host_config = self.c.create_host_config(

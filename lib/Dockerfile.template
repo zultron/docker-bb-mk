@@ -115,5 +115,5 @@ ENV		HOME /home/docker
 WORKDIR		%(container_dir)s
 # CMD		/bin/bash -i
 CMD		["/usr/bin/sudo", "-n", \
-		    "/usr/bin/supervisord", "-n",
+		    "/usr/bin/supervisord", "-n", \
 		    "-c", "/etc/supervisor/supervisord.conf"]

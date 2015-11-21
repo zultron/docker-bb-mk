@@ -13,15 +13,18 @@ class container(object):
         self.context = docker_context(config)
 
     re_subs = (
+        # Undo docker-py markup, {"stream":"[...]"}
+        (r'^{\"stream\":\"(.*)\"}\s*$', lambda m: m.group(1)),
+        # Escaped characters
         (r'\\u0026', '&'),
         (r'\\u0009', ' '), # tab
         (r'\\u003c', '<'),
         (r'\\u003e', '>'),
         (r'\\u001b\[..', ''), # ???
-        (r'\\r\\n\"}', '"}'), # final CRLF
-        (r'\\[rn]\"}', '"}'), # final CR or LF
+        # Whitespace
+        (r'\\r', '\r'), # LF
+        (r'\\n', '\n'), # CR
         (r' +', ' '), # collapse spaces
-        (r'\\[rn]', '\n           '), # add newlines with indent
         )
 
     def image(self):

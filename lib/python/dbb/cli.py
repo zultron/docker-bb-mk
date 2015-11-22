@@ -1,11 +1,16 @@
-import argparse
+import argparse, os
 from dbb.config import config
 from dbb.container import container
 from dbb.setup import setup
 
 class cli(object):
-    def __init__(self):
+    def __init__(self, topdir):
         self.parse()
+        if not os.path.exists(self.args.config_file):
+            c = os.path.join(topdir, self.args.config_file)
+            if os.path.exists(c):
+                self.args.config_file = c
+            #else: throw a suitable error
         self.config = config(self.args.config_file, self.args.docker_hostname)
 
     def parse(self):

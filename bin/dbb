@@ -9,4 +9,4 @@ sys.path.append(pythondir)
 
 from dbb import cli
 
-cli().doit()
+cli(topdir).doit()

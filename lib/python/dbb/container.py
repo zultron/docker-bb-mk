@@ -7,10 +7,16 @@ import sys, os, re
 
 class container(object):
     def __init__(self, config):
-        self.c = docker.Client(base_url='unix://var/run/docker.sock',
-                               version='auto')
         self.config = config
         self.context = docker_context(config)
+
+    @property
+    def c(self):
+        """Docker client object, generated only on demand"""
+        if not hasattr(self, '_c'):
+            self._c = docker.Client(base_url='unix://var/run/docker.sock',
+                                    version='auto')
+        return self._c
 
     re_subs = (
         # Undo docker-py markup, {"stream":"[...]"}

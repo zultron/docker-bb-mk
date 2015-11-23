@@ -1,7 +1,6 @@
 import argparse, os
 from dbb.config import config
 from dbb.container import container
-from dbb.setup import setup
 
 class cli(object):
     def __init__(self, topdir):
@@ -10,7 +9,9 @@ class cli(object):
             c = os.path.join(topdir, self.args.config_file)
             if os.path.exists(c):
                 self.args.config_file = c
-            #else: throw a suitable error
+            else:
+                raise RuntimeError("Unable to locate config, '%s'" % \
+                                       self.args.config_file)
         self.config = config(self.args.config_file, self.args.docker_hostname)
 
     def parse(self):
@@ -27,6 +28,9 @@ class cli(object):
         # main operations
         cmdgroup.add_argument("--build", action="store_true",
                               help="Build container")
+        cmdgroup.add_argument("--init", action="store_true",
+                              help="Initialize Buildbot and ssh config " \
+                                  "(idempotent)")
         cmdgroup.add_argument("--run", action="store_true",
                               help="Run container")
         cmdgroup.add_argument("--attach", action="store_true",
@@ -35,8 +39,6 @@ class cli(object):
                               help="Stop container")
         cmdgroup.add_argument("--remove", action="store_true",
                               help="Remove container (must be stopped)")
-        cmdgroup.add_argument("--setup", action="store_true",
-                              help="(Internal use) Container startup routines")
         # debug
         cmdgroup.add_argument("--dump-config", action="store_true",
                               help="Dump configuration")
@@ -55,6 +57,8 @@ class cli(object):
         # main operations
         if self.args.build:
             self.docker.build()
+        if self.args.init:
+            self.docker.init()
         if self.args.run:
             self.docker.run()
         if self.args.attach:
@@ -63,8 +67,6 @@ class cli(object):
             self.docker.stop()
         if self.args.remove:
             self.docker.remove()
-        if self.args.setup:
-            setup(self.config)
         # debug
         if self.args.dump_config:
             self.config.dump()

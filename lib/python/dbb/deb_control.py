@@ -9,6 +9,6 @@ class deb_control(template):
         res = dict(
             xenomai = ''
             )
-        if 'xenomai' in self.config.slave_flavors():
+        if 'xenomai' in self.config.slave.flavors:
             res['xenomai'] = 'xenomai-dev,'
         return res

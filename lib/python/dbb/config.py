@@ -1,25 +1,90 @@
 import socket, yaml, os, subprocess
 
+class slave_config(object):
+    def __init__(self, config, slave_name):
+        self.global_config = config
+        self.select(slave_name)
+
+    def select(self, slave_name):
+        """Select a new default slave"""
+        self.name = slave_name
+        self.config = self.global_config.config['slaves'][self.name]
+        return self
+
+    def get(self, slave_name):
+        """Generator:  get slave object by name"""
+        return slave_config(self.global_config, slave_name)
+
+    @property
+    def base_image(self):
+        return self.config.get('base_image','debian:jessie')
+
+    @property
+    def tcl_ver(self):
+        return self.config.get('tcl_ver','8.6')
+
+    @property
+    def flavors(self):
+        return self.config.get('flavors',['posix'])
+
+    @property
+    def parallel_jobs(self):
+        return self.config.get('parallel_jobs',1)
+
+    @property
+    def master(self):
+        """Master for this slave"""
+        return self.config['master']
+
+    @property
+    def password(self):
+        """Password for this slave"""
+        return self.config['password']
+
+    @property
+    def dir(self):
+        return os.path.join(self.global_config.base_dir, "slave")
+
+
+    def slave_list(self, master=None):
+        """
+        Return list of slave names for a master
+        """
+        return [ s for s in self.global_config.config['slaves']
+                 if self.global_config.config['slaves'][s]['master'] == \
+                     (master or self.global_config.hostname) ]
+
+
 class config(object):
     def __init__(self, config_file, hostname=None):
-        self.hostname = hostname or socket.gethostname()
+        self.hostname = hostname or os.environ.get('CONTAINER', None)
+        if self.hostname is None:
+            raise RuntimeError("Please specify hostname to configure")
         self.config_file = config_file
         self.config = yaml.load(file(config_file,"r"))
+        self.slave = slave_config(self, self.hostname)
 
     def dump(self):
         from pprint import pprint
         pprint(self.config)
 
     @property
-    def base_dir(self):
-        return os.path.dirname(os.path.realpath(self.config_file))
-
-    @property
     def container_dir(self):
+        """Configured mount destination for this tree in Docker filesystem"""
         return self.config.get('container_dir', '/home/docker/bb')
 
     @property
+    def base_dir(self):
+        """Base directory of this tree"""
+        return os.path.dirname(os.path.realpath(self.config_file))
+
+    @property
+    def dbb_executable(self):
+        return "bin/dbb"  # lame, I know; needs to work both inside and out
+
+    @property
     def lib_dir(self):
+        """Lib directory within this tree"""
         return os.path.join(self.base_dir, "lib")
 
     @property
@@ -38,32 +103,17 @@ class config(object):
     def gid(self):
         return self.config.get('gid', os.getgid())
 
-    def slave_config(self, slave=None):
-        return self.config.get('slaves',{}).get(slave or self.hostname,{})
-
-    @property
-    def base_image(self):
-        return self.slave_config().get('base_image','debian:jessie')
-
-    @property
-    def tcl_ver(self):
-        return self.slave_config().get('tcl_ver','8.6')
-
-    def _maintainer(self,what):
-        res = self.config.get('maintainer_%s' % what,None)
-        if res is None:
-            cmd = ["git","config","--get","user.%s" % what]
-            with subprocess.Popen(cmd,stdout=subprocess.PIPE).stdout as p:
-                res = p.read()[:-1]
-        return res
-
     @property
     def maintainer_name(self):
-        return self._maintainer('name')
+        return self.config.get('maintainer_name', 'John Doe')
 
     @property
     def maintainer_email(self):
-        return self._maintainer('email')
+        return self.config.get('maintainer_email', 'jdoe@example.com')
+
+    @property
+    def maintainer_keys(self):
+        return self.config.get('maintainer_keys', [])
 
     @property
     def supervisord_conf(self):
@@ -84,13 +134,13 @@ class config(object):
             http_proxy = self.http_proxy,
             uid = self.uid,
             gid = self.gid,
-            base_image = self.base_image,
-            tcl_ver = self.tcl_ver,
+            base_image = self.slave.base_image,
+            tcl_ver = self.slave.tcl_ver,
             maintainer_name = self.maintainer_name,
             maintainer_email = self.maintainer_email,
             supervisord_conf = self.supervisord_conf,
             master_dir = self.master_dir,
-            slave_dir = self.slave_dir,
+            slave_dir = self.slave.dir,
             )
 
     def render_template(self, fname, extra_subs = {}):
@@ -135,27 +185,5 @@ class config(object):
         return os.path.join(self.base_dir, "master")
 
     @property
-    def slave_dir(self):
-        return os.path.join(self.base_dir, "slave")
-
-    def slaves(self, master=None):
-        """
-        Return slice of 'slaves' dict that matches the master
-        """
-        return [ s for s in self.config['slaves']
-                 if self.slave_master(s) == (master or self.hostname) ]
-
-    def slave_master(self, slave=None):
-        """
-        Return master for this slave
-        """
-        return self.slave_config(slave)['master']
-
-    def slave_password(self, slave=None):
-        """
-        Return master for this slave
-        """
-        return self.slave_config(slave)['password']
-
-    def slave_flavors(self):
-        return self.slave_config().get('flavors',['posix'])
+    def slave_list(self):
+        return self.slave.slave_list()

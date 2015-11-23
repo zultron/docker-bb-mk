@@ -111,6 +111,7 @@ ENV		SYSLOG_TO_STDERR 1
 # By default, run an interactive shell as user 'docker'
 USER		docker
 ENV		HOME /home/docker
+ENV		CONTAINER %(hostname)s
 WORKDIR		%(container_dir)s
 # CMD		/bin/bash -i
 CMD		["/usr/bin/sudo", "-n", \

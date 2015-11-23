@@ -34,7 +34,11 @@ Build the Docker image, choosing a host name from the config file
 
     bin/dbb -H d8-64-posix --build
 
-# Running the Docker container
+# Initializing and running the Docker container
+
+Initialize the Docker container SSH keys and Build master and slave:
+
+	bin/dbb -H d8-64-posix --init
 
 Create and run the Docker container:
 

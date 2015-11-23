@@ -1,7 +1,8 @@
 #########################################
 # Docker image build options
 
-# Optional:  your name and email; defaults taken from git
+# Optional:  your name and email; defaults to 'John Doe' and
+# 'jdoe@example.com'
 #
 #maintainer_name:  John Doe
 #maintainer_email: jdoe@example.com
@@ -51,15 +52,23 @@ maintainer_keys:
 # Required:  Map of buildmaster and buildslaves to hosts; matched
 # against the `bin/dbb --docker-hostname HOSTNAME` argument
 #
+# key:  Name of host and of slave
+# base_image:  Base image used by `dbb --build`
+# password:  Password for slave to authenticate with master
+# master:  Name of master host (when same as slave, runs from same container)
+# parallel_jobs:  `make -j` parallel jobs argument
+# 
 slaves:
   d8-64-posix:
     base_image: debian:jessie
     password: togyoijHyarHafveHusirdErcyahianvatKakpel
     master: d8-64-posix
+    parallel_jobs: 1
   d8-arm-posix:
     base_image: armbuild/debian:jessie
     password: flyicUbVauWryacOcKucmuwaisyotcuBudElpons
     master: d8-arm-posix
+    parallel_jobs: 1
 
 # Optional: Name and link of project, shown on web status page;
 # defaults to '(unknown)' and http://localhost:8010/

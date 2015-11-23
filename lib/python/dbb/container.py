@@ -3,12 +3,14 @@
 import docker
 import dockerpty
 from dbb.docker_context import docker_context
+from dbb.init import init
 import sys, os, re
 
 class container(object):
     def __init__(self, config):
         self.config = config
         self.context = docker_context(config)
+        self._init = init(config)
 
     @property
     def c(self):
@@ -59,12 +61,14 @@ class container(object):
                   if u'/%s' % self.config.hostname in c['Names'] ]
         return (clist + [None])[0]
 
-    def create_container(self):
+    def create_container(self, cmd=None):
+        if cmd is None:
+            cmd = ["bash", "-i"]
         c = self.c.create_container(
             image = self.config.hostname,
             detach = False,
             stdin_open = True,
-            command = ["bash", "-i"],
+            command = cmd,
             hostname = self.config.hostname,
             name = self.config.hostname,
             user = self.config.uid,
@@ -99,20 +103,43 @@ class container(object):
         i = self.c.inspect_container(self.config.hostname)
         return i['State']['Running']
 
-    def run(self):
+    def run(self, cmd=None):
         if self.container() and self.is_running():
             sys.stderr.write("Error:  container already running\n")
             sys.exit(1)
 
         # Create the container if needed
         if not self.container():
-            self.create_container()
+            self.create_container(cmd)
         else:
             sys.stderr.write("Warning:  container already created\n")
 
         # Start the container if needed
         self.c.start(self.config.hostname)
         sys.stderr.write("Container started\n")
+
+    def logs(self):
+        if not self.container() or not self.is_running():
+            return
+        for l in self.c.logs(self.config.hostname, stream=True):
+            sys.stdout.write(l)
+
+    def init(self):
+        if os.environ.get('CONTAINER', None) == self.config.hostname:
+            # Assume we're in the container; initialize it
+            self._init.init()
+        else:
+            # Assume we're in the host OS; re-run command in container
+            if self.container():
+                sys.stderr.write(
+                    "Error:  container exists; please remove before init\n")
+                sys.exit(1)
+            try:
+                self.run([self.config.dbb_executable,
+                          "-H", self.config.hostname, "--init"])
+                self.logs()
+            finally:
+                self.remove()
 
     def attach(self):
         if not self.container():

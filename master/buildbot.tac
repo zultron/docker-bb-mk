@@ -1,6 +1,6 @@
 #								-*-python-*-
 # Set up docker-bb configuration
-import os, sys
+import os, sys, time
 topdir = os.path.realpath(os.path.join(
         os.path.dirname(__file__), '..'))
 pythondir = os.path.join(topdir, 'lib', 'python')
@@ -9,6 +9,9 @@ sys.path.append(pythondir)
 from dbb.config import config as Config
 config = Config(os.path.join(topdir, "config.yaml"))
 
+# If container is not buildmaster, pretend to be a daemon
+while True:
+    time.sleep(10)
 
 import os
 

@@ -1,9 +1,18 @@
 import socket, yaml, os, subprocess
 
 class slave_config(object):
-    def __init__(self, config, slave_name):
+    def __init__(self, config, slave_name=None):
         self.global_config = config
+        if slave_name is None:
+            slave_name = self.get_slave_by_host()
         self.select(slave_name)
+
+    def get_slave_by_host(self):
+        h = os.environ.get('HOSTNAME',None) or socket.gethostname()
+        for name in self.global_config.config['slaves'].keys():
+            if self.global_config.config['slaves'][name]['host'] == h:
+                return name
+        raise RuntimeError('Unable to find slave from hostname "%s"' % hostname)
 
     def select(self, slave_name):
         """Select a new default slave"""
@@ -14,6 +23,10 @@ class slave_config(object):
     def get(self, slave_name):
         """Generator:  get slave object by name"""
         return slave_config(self.global_config, slave_name)
+
+    @property
+    def host(self):
+        return self.config.get('host', self.name)
 
     @property
     def base_image(self):
@@ -46,16 +59,18 @@ class config(object):
         self.config_file = config_file
         self.config = yaml.load(file(config_file,"r"))
 
+        self.slave = slave_config(self, hostname)
+
         # Go through some antics to automatically figure out hostname
         if hostname is None:
             self.hostname = os.environ.get('HOSTNAME', None)  # Container
         if hostname is None and socket.gethostname() == self.master_host:
             hostname = self.master_name
         if hostname is None:
-            raise RuntimeError("Unable to determine host")
+            hostname = self.slave.name
         self.hostname = hostname
 
-        self.slave = slave_config(self, self.hostname)
+        self.slave.select(hostname)
 
     def dump(self):
         from pprint import pprint

@@ -10,8 +10,9 @@ from dbb.config import config as Config
 config = Config(os.path.join(topdir, "config.yaml"))
 
 # If container is not buildmaster, pretend to be a daemon
-while True:
-    time.sleep(10)
+if config.hostname != config.master_name:
+    while True:
+        time.sleep(10)
 
 import os
 

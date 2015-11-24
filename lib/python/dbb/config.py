@@ -7,17 +7,25 @@ class slave_config(object):
             slave_name = self.get_slave_by_host()
         self.select(slave_name)
 
+    @property
+    def slave_dict(self):
+        return self.global_config.config.get('slaves',{})
+
+    def builder_slaves(self, builder):
+        return [ s for s in self.slave_dict \
+                 if self.slave_dict[s].get('builders', None) == builder ]
+
     def get_slave_by_host(self):
         h = os.environ.get('HOSTNAME',None) or socket.gethostname()
-        for name in self.global_config.config['slaves'].keys():
-            if self.global_config.config['slaves'][name]['host'] == h:
+        for name in self.slave_dict:
+            if self.slave_dict[name]['host'] == h:
                 return name
         raise RuntimeError('Unable to find slave from hostname "%s"' % hostname)
 
     def select(self, slave_name):
         """Select a new default slave"""
         self.name = slave_name
-        self.config = self.global_config.config['slaves'][self.name]
+        self.config = self.slave_dict[self.name]
         return self
 
     def get(self, slave_name):

@@ -32,11 +32,6 @@ class slave_config(object):
         return self.config.get('parallel_jobs',1)
 
     @property
-    def master(self):
-        """Master for this slave"""
-        return self.config['master']
-
-    @property
     def password(self):
         """Password for this slave"""
         return self.config['password']
@@ -46,22 +41,20 @@ class slave_config(object):
         return os.path.join(self.global_config.base_dir, "slave")
 
 
-    def slave_list(self, master=None):
-        """
-        Return list of slave names for a master
-        """
-        return [ s for s in self.global_config.config['slaves']
-                 if self.global_config.config['slaves'][s]['master'] == \
-                     (master or self.global_config.hostname) ]
-
-
 class config(object):
     def __init__(self, config_file, hostname=None):
-        self.hostname = hostname or os.environ.get('CONTAINER', None)
-        if self.hostname is None:
-            raise RuntimeError("Please specify hostname to configure")
         self.config_file = config_file
         self.config = yaml.load(file(config_file,"r"))
+
+        # Go through some antics to automatically figure out hostname
+        if hostname is None:
+            self.hostname = os.environ.get('HOSTNAME', None)  # Container
+        if hostname is None and socket.gethostname() == self.master_host:
+            hostname = self.master_name
+        if hostname is None:
+            raise RuntimeError("Unable to determine host")
+        self.hostname = hostname
+
         self.slave = slave_config(self, self.hostname)
 
     def dump(self):
@@ -86,6 +79,11 @@ class config(object):
     def lib_dir(self):
         """Lib directory within this tree"""
         return os.path.join(self.base_dir, "lib")
+
+    @property
+    def host(self):
+        """Docker host name"""
+        return os.environ.get('HOSTNAME', None) or socket.gethostname()
 
     @property
     def debian_mirror(self):
@@ -139,6 +137,8 @@ class config(object):
             maintainer_name = self.maintainer_name,
             maintainer_email = self.maintainer_email,
             supervisord_conf = self.supervisord_conf,
+            master_name = self.master_name,
+            master_host = self.master_host,
             master_dir = self.master_dir,
             slave_dir = self.slave.dir,
             )
@@ -181,9 +181,20 @@ class config(object):
         return self.config.get('admin_users', {})
 
     @property
+    def master_name(self):
+        return self.config['master_name']
+
+    @property
+    def master_host(self):
+        return self.config['master_host']
+
+    @property
     def master_dir(self):
         return os.path.join(self.base_dir, "master")
 
     @property
-    def slave_list(self):
-        return self.slave.slave_list()
+    def slaves(self):
+        """
+        Return list of slave names
+        """
+        return self.config.get('slaves',{}).keys()

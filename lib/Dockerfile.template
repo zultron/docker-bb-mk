@@ -58,9 +58,10 @@ RUN		groupadd -g %(gid)s docker && \
 		    useradd -u %(uid)s -g %(gid)s -G sudo -M docker && \
  		    install -d -m 755 -o docker -g docker ~docker
 
-# Set up Buildbot work directory and network port
+# Set up Buildbot work directory and network ports
 VOLUME		%(container_dir)s
 EXPOSE		8010
+EXPOSE		9989
 
 # Set up ssh access
 RUN		apt-get install -y ssh && \
@@ -111,7 +112,7 @@ ENV		SYSLOG_TO_STDERR 1
 # By default, run an interactive shell as user 'docker'
 USER		docker
 ENV		HOME /home/docker
-ENV		CONTAINER %(hostname)s
+ENV		CONTAINER docker-bb
 WORKDIR		%(container_dir)s
 # CMD		/bin/bash -i
 CMD		["/usr/bin/sudo", "-n", \

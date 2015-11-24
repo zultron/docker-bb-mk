@@ -4,7 +4,7 @@ import docker
 import dockerpty
 from dbb.docker_context import docker_context
 from dbb.init import init
-import sys, os, re
+import sys, os, re, socket
 
 class container(object):
     def __init__(self, config):
@@ -75,7 +75,8 @@ class container(object):
             tty = True,
             ports = [8010],
             environment = dict(
-                DISPLAY = os.environ.get('DISPLAY','')
+                DISPLAY = os.environ.get('DISPLAY',''),
+                HOSTNAME = socket.gethostname(),
                 ),
             volumes = [self.config .container_dir, '/tmp/.X11-unix'],
             host_config = self.c.create_host_config(
@@ -91,6 +92,7 @@ class container(object):
                     },
                 port_bindings = {
                     8010 : 8010,
+                    9989 : 9989,
                     },
                 privileged = True,
                 )
@@ -125,7 +127,7 @@ class container(object):
             sys.stdout.write(l)
 
     def init(self):
-        if os.environ.get('CONTAINER', None) == self.config.hostname:
+        if os.environ.get('CONTAINER', None) == 'docker-bb':
             # Assume we're in the container; initialize it
             self._init.init()
         else:
@@ -135,9 +137,13 @@ class container(object):
                     "Error:  container exists; please remove before init\n")
                 sys.exit(1)
             try:
-                self.run([self.config.dbb_executable,
-                          "-H", self.config.hostname, "--init"])
+                cmd = [self.config.dbb_executable,
+                          "-H", self.config.hostname, "--init"]
+                sys.stderr.write("Re-running in Docker container\n")
+                self.run(cmd)
                 self.logs()
+            except Exception as e:
+                sys.stderr.write("Exception:  %s\n" % e)
             finally:
                 self.remove()
 

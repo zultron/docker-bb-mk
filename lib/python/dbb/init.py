@@ -17,6 +17,9 @@ class init(object):
                 f.write(re.sub(r'\n', '', keystr) + "\n")
 
     def buildbot_master(self):
+        if self.config.master_host != self.config.host:
+            sys.stderr.write("*** Container is not Buildbot master; not initializing\n")
+            return
         cmd = [ "buildbot", "create-master", self.config.master_dir ]
         sys.stderr.write("*** Initializing Buildbot master:  %s\n" % \
                              ' '.join(cmd))
@@ -24,7 +27,7 @@ class init(object):
 
     def buildbot_slave(self):
         cmd = [ "buildslave", "create-slave", self.config.slave.dir,
-                self.config.slave.master, self.config.hostname,
+                self.config.master_host, self.config.hostname,
                 self.config.slave.password ]
         sys.stderr.write("*** Initializing Buildbot slave:  %s\n" % \
                              ' '.join(cmd))

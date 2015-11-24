@@ -32,7 +32,7 @@ except ImportError:
   # probably not yet twisted 8.2.0 and beyond, can't set log yet
   pass
 
-buildmaster_host = config.slave.master
+buildmaster_host = config.master_host
 port = 9989
 slavename = config.hostname
 passwd = config.slave.password

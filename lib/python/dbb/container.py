@@ -63,7 +63,9 @@ class container(object):
 
     def create_container(self, cmd=None):
         if cmd is None:
-            cmd = ["bash", "-i"]
+            cmd = ["/usr/bin/sudo", "-n", \
+                   "/usr/bin/supervisord", "-n", \
+                   "-c", "/etc/supervisor/supervisord.conf"]
         c = self.c.create_container(
             image = self.config.hostname,
             detach = False,
@@ -73,7 +75,7 @@ class container(object):
             name = self.config.hostname,
             user = self.config.uid,
             tty = True,
-            ports = [8010],
+            ports = [8010, 9989, 22],
             environment = dict(
                 DISPLAY = os.environ.get('DISPLAY',''),
                 HOSTNAME = socket.gethostname(),
@@ -91,8 +93,9 @@ class container(object):
                         ),
                     },
                 port_bindings = {
-                    8010 : 8010,
+                    8010 : 80,
                     9989 : 9989,
+                    22 : 2222,
                     },
                 privileged = True,
                 )

@@ -1,5 +1,4 @@
 import socket, yaml, os, subprocess
-from twisted.python import log
 
 class AbstractSlaveConfig(object):
     global_config = None

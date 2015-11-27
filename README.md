@@ -55,3 +55,17 @@ Stop and remove the Docker container:
 
 Set up Buildbot:  (to be written; see `lib/python/dbb/setup.py`)
 
+# Provisioning scripts
+
+Add a user & set passwordless sudo
+
+	NEWUSER=jdoe
+    addgroup --gid 1000 $NEWUSER
+	adduser --shell /bin/bash --uid 1000 --gid 1000 \
+		--disabled-password --gecos '' $NEWUSER
+	adduser $NEWUSER sudo
+	adduser $NEWUSER docker
+	install -d -m 700 -o $NEWUSER -g $NEWUSER /home/$NEWUSER/.ssh
+	install -m 644 -o $NEWUSER -g $NEWUSER \
+		/root/.ssh/authorized_keys /home/$NEWUSER/.ssh/authorized_keys
+	sed -i /etc/sudoers -e '/^.sudo/ s/ALL$/NOPASSWD: ALL/'

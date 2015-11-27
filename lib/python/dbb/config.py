@@ -1,11 +1,46 @@
 import socket, yaml, os, subprocess
+from twisted.python import log
 
-class slave_config(object):
-    def __init__(self, config, slave_name=None):
-        self.global_config = config
+class AbstractSlaveConfig(object):
+    global_config = None
+    type_map = {}
+    slave_class_name = None
+
+    class __metaclass__(type):
+        __child_classes__ = []
+
+        def __new__(meta, name, bases, dct):
+            cls = type.__new__(meta, name, bases, dct)
+            meta.__child_classes__.append(cls)
+            return cls
+
+    def __init__(self, slave_name=None):
         if slave_name is None:
-            slave_name = self.get_slave_by_host()
-        self.select(slave_name)
+            slave_name = self.get_slave_name_by_host()
+        self.name = slave_name
+        self.config = self.slave_dict[self.name]
+
+    @classmethod
+    def get_slave_config(cls, slave_name=None):
+        if slave_name is None:
+            slave_name = cls.get_slave_name_by_host()
+        slave_params = cls.global_config.config['slaves'][slave_name]
+        slave_type = slave_params.get('slave_type', 'vanilla')
+        slave_config_cls = ([ c for c in cls.__child_classes__ \
+                              if c.slave_class_name == slave_type ] \
+                            + [None])[0]
+        if slave_config_cls is None:
+            raise RuntimeError('Unable to find slave class for "%s"' %
+                               slave_type)
+        return slave_config_cls(slave_name)
+
+    @classmethod
+    def get_slave_name_by_host(cls):
+        h = socket.gethostname()
+        for (name, params) in cls.global_config.config['slaves'].items():
+            if params['host'] == h:
+                return name
+        raise RuntimeError('Unable to find slave from hostname "%s"' % h)
 
     @property
     def slave_dict(self):
@@ -14,23 +49,6 @@ class slave_config(object):
     def builder_slaves(self, builder):
         return [ s for s in self.slave_dict \
                  if self.slave_dict[s].get('builders', None) == builder ]
-
-    def get_slave_by_host(self):
-        h = os.environ.get('HOSTNAME',None) or socket.gethostname()
-        for name in self.slave_dict:
-            if self.slave_dict[name]['host'] == h:
-                return name
-        raise RuntimeError('Unable to find slave from hostname "%s"' % hostname)
-
-    def select(self, slave_name):
-        """Select a new default slave"""
-        self.name = slave_name
-        self.config = self.slave_dict[self.name]
-        return self
-
-    def get(self, slave_name):
-        """Generator:  get slave object by name"""
-        return slave_config(self.global_config, slave_name)
 
     @property
     def host(self):
@@ -61,28 +79,62 @@ class slave_config(object):
     def dir(self):
         return os.path.join(self.global_config.base_dir, "slave")
 
+    def build_slave_object(self):
+        from buildbot import buildslave
+        return buildslave.BuildSlave(self.name, self.password)
+
+    def dump(self):
+        from pprint import pprint
+        pprint(self.__dict__)
+
+class SlaveConfig(AbstractSlaveConfig):
+    slave_class_name = 'vanilla'
+
+class DigitalOceanSlaveConfig(AbstractSlaveConfig):
+    slave_class_name = 'DigitalOcean'
+
+    def __init__(self, slave_name):
+        super(DigitalOceanSlaveConfig, self).__init__(slave_name)
+        self.image = self.config['image']
+        self.size_slug = self.config['size_slug']
+        self.region = self.config['region']
+        self.token = self.global_config.config['digitalocean']['token']
+
+    def build_slave_object(self):
+        from digitalocean_buildslave import DigitalOceanLatentBuildSlave
+        return DigitalOceanLatentBuildSlave(
+            name=self.name,
+            password=self.password,
+            droplet_name=self.name,
+            token=self.token,
+            region=self.region,
+            image=self.image,
+            size_slug=self.size_slug,
+        )
+
 
 class config(object):
     def __init__(self, config_file, hostname=None):
         self.config_file = config_file
         self.config = yaml.load(file(config_file,"r"))
-
-        self.slave = slave_config(self, hostname)
+        AbstractSlaveConfig.global_config = self
 
         # Go through some antics to automatically figure out hostname
-        if hostname is None:
-            self.hostname = os.environ.get('HOSTNAME', None)  # Container
-        if hostname is None and socket.gethostname() == self.master_host:
-            hostname = self.master_name
-        if hostname is None:
-            hostname = self.slave.name
+        host_hostname = socket.gethostname()
+        if hostname is None:  # Look in slaves list
+            host_slaves = [
+                s for s in self.config['slaves'] \
+                if self.config['slaves'][s]['host'] == socket.gethostname() ]
+            if len(host_slaves) == 1:
+                hostname = host_slaves[0]
         self.hostname = hostname
 
-        self.slave.select(hostname)
+        self.slave = AbstractSlaveConfig.get_slave_config(hostname)
 
     def dump(self):
         from pprint import pprint
         pprint(self.config)
+        self.slave.dump()
 
     @property
     def container_dir(self):
@@ -221,3 +273,7 @@ class config(object):
         Return list of slave names
         """
         return self.config.get('slaves',{}).keys()
+
+    def get_slave_config(self, slave_name):
+        return AbstractSlaveConfig.get_slave_config(slave_name)
+
